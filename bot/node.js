@@ -2,12 +2,12 @@ var state=0, state_led=false;
 var gpio={
 	motor:{
 		left:{
-			backward:35,
-			forward:37
+			a:35,
+			b:37
 		},
 		right:{
-			backward:36,
-			forward:38
+			a:36,
+			b:38
 		}
 	},
 	led:12
@@ -100,34 +100,34 @@ showStatus();
 // }
 // { motor control
 function motorRight() {
-	gpioset(gpio.motor.left.backward, false);
-	gpioset(gpio.motor.left.forward, true);
-	gpioset(gpio.motor.right.backward, true);
-	gpioset(gpio.motor.right.forward, false);
+	gpioset(gpio.motor.left.a, false);
+	gpioset(gpio.motor.left.b, true);
+	gpioset(gpio.motor.right.a, true);
+	gpioset(gpio.motor.right.b, false);
 }
 function motorLeft() {
-	gpioset(gpio.motor.left.backward, true);
-	gpioset(gpio.motor.left.forward, false);
-	gpioset(gpio.motor.right.backward, false);
-	gpioset(gpio.motor.right.forward, true);
+	gpioset(gpio.motor.left.a, true);
+	gpioset(gpio.motor.left.b, false);
+	gpioset(gpio.motor.right.a, false);
+	gpioset(gpio.motor.right.b, true);
 }
 function motorForward() {
-	gpioset(gpio.motor.left.backward, false);
-	gpioset(gpio.motor.left.forward, true);
-	gpioset(gpio.motor.right.backward, false);
-	gpioset(gpio.motor.right.forward, true);
+	gpioset(gpio.motor.left.a, true);
+	gpioset(gpio.motor.left.b, false);
+	gpioset(gpio.motor.right.a, true);
+	gpioset(gpio.motor.right.b, false);
 }
 function motorBackward() {
-	gpioset(gpio.motor.left.backward, true);
-	gpioset(gpio.motor.left.forward, false);
-	gpioset(gpio.motor.right.backward, true);
-	gpioset(gpio.motor.right.forward, false);
+	gpioset(gpio.motor.left.a, false);
+	gpioset(gpio.motor.left.b, true);
+	gpioset(gpio.motor.right.a, false);
+	gpioset(gpio.motor.right.b, true);
 }
 function motorOff() {
-	gpioset(gpio.motor.left.backward, false);
-	gpioset(gpio.motor.left.forward, false);
-	gpioset(gpio.motor.right.backward, false);
-	gpioset(gpio.motor.right.forward, false);
+	gpioset(gpio.motor.left.a, false);
+	gpioset(gpio.motor.left.b, false);
+	gpioset(gpio.motor.right.a, false);
+	gpioset(gpio.motor.right.b, false);
 }
 // }
 function handleCommand(command) {
@@ -142,7 +142,7 @@ function handleCommand(command) {
 			motorForward();
 		break;
 		case 'right':
-			motorLeft();
+			motorRight();
 		break;
 		case 'stop':
 			motorOff();
