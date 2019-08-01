@@ -1,4 +1,17 @@
 var state=0, state_led=false;
+var gpio={
+	motor:{
+		left:{
+			backward:35,
+			forward:37
+		},
+		right:{
+			backward:36,
+			forward:38
+		}
+	},
+	led:12
+};
 
 // { functions
 function bytesToString(buffer) {
@@ -85,19 +98,6 @@ function showStatus() {
 }
 showStatus();
 // }
-var gpio={
-	motor:{
-		left:{
-			backward:16,
-			forward:26
-		},
-		right:{
-			backward:16,
-			forward:20
-		}
-	},
-	led:17
-};
 // { motor control
 function motorRight() {
 	gpioset(gpio.motor.left.backward, false);
