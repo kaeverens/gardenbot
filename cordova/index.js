@@ -1,4 +1,5 @@
 window.addEventListener('load', function() {
+	console.log('window load');
 	var device;
 	function stringToBytes(string) {
 		var array=new Uint8Array(string.length);
@@ -11,19 +12,25 @@ window.addEventListener('load', function() {
 		if (window.ble===undefined) {
 			return setTimeout(startScan, 100);
 		}
+		console.log('starting the scan');
 		ble.startScan(
 			[],
 			function(founddevice) {
+				console.log(founddevice);
 				if (founddevice.name!='gardenbot') {
 					return;
 				}
 				device=founddevice;
 				ble.connect(device.id,
 					function(e) {
+						var el=document.getElementById('status');
+						el.textContent='connected!';
 						console.log(e);
 						ble.stopScan();
 					},
 					function(e) {
+						var el=document.getElementById('status');
+						el.textContent='not connected';
 						console.log(e);
 						startScan();
 					}
