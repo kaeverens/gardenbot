@@ -1,102 +1,108 @@
-var state=0, state_led=false;
-var gpio={
+const { exec } = require('child_process');
+var https = require('https');
+var querystring=require('querystring');
+
+const GPIO_TIMEOUT=3000;
+const BOTHUB_HOST='bot.verens.com';
+const BOTHUB_PORT=443;
+const gpio={
 	motor:{
 		left:{
-			a:35,
-			b:37
+			a:11,
+			b:17
 		},
 		right:{
-			a:36,
-			b:38
+			a:16,
+			b:15
 		}
 	},
 	led:12
 };
+var bot={
+};
 
+exec("ifconfig | grep 'eth0 ' | cut -d ' ' -f 11", (err, stdout, stderr)=>{
+	var mac=stdout.trim();
+	if (mac.length!=17) {
+		console.log('failed to retrieve MAC');
+		console.log(mac);
+		return;
+	}
+	ajax('/register.php', {
+		mac:mac
+	}, ret=>{
+		bot.id=ret.id;
+		bot.mac=mac;
+		bot.last_cmd=0;
+		setInterval(cmdPoll, 1000);
+	});
+});
+var cmdPollLock=0;
+function cmdPoll() {
+	if (cmdPollLock) {
+		return;
+	}
+	var t= +(new Date);
+	cmdPollLock=t;
+	ajax('/bot-getCommands.php', {
+		bot_id:bot.id,
+		bot_mac:bot.mac,
+		last_cmd:bot.last_cmd
+	}, ret=>{
+		console.log(ret);
+		cmdPollLock=0;
+		ret.cmds.forEach(cmd=>{
+			if (cmd.id<bot.last_cmd) {
+				return;
+			}
+			bot.last_cmd=cmd.id;
+			handleCommand(cmd.cmd);
+		});
+	});
+}
+function ajax(url, params, callback) {
+	var data=querystring.stringify(params);
+	var options={
+		hostname:BOTHUB_HOST,
+		port:BOTHUB_PORT,
+		path:url,
+		method:'POST',
+		headers:{
+			'Content-Type':'application/x-www-form-urlencoded',
+			'Content-Length':data.length
+		}
+	};
+	var req=https.request(options,  res=>{
+		res.on('data', d=>{
+			var ret=JSON.parse(''+d);
+			callback(ret);
+		});
+	});
+	req.on('error', e=>{
+		console.error(e);
+	});
+	req.write(data);
+	req.end();
+}
 // { functions
-function bytesToString(buffer) {
-	return String.fromCharCode.apply(null, new Uint8Array(buffer));
-}
+var gpiocalls=[]; // used to timeout long-running calls
 function gpioset(num, val) {
-	console.log(num, ' ', val);
-	rpio.open(num, rpio.OUTPUT, rpio.PULL_UP);
-	rpio.write(num, val?rpio.HIGH:rpio.LOW);
-}
-// }
-// { load libraries
-var rpio=require('rpio');
-var bleno = require('bleno');
-var BlenoPrimaryService = bleno.PrimaryService;
-var util = require('util');
-// }
-// { set up bluetooth
-var BlenoCharacteristic = bleno.Characteristic;
-var EchoCharacteristic = function() {
-  EchoCharacteristic.super_.call(this, {
-    uuid: 'ec0e',
-    properties: ['read', 'write', 'notify'],
-    value: null
-  });
-  this._value = new Buffer(0);
-  this._updateValueCallback = null;
-};
-util.inherits(EchoCharacteristic, BlenoCharacteristic);
-EchoCharacteristic.prototype.onWriteRequest = function(data, offset, withoutResponse, callback) {
-  this._value = data;
-	state=1;
-  console.log('EchoCharacteristic - onWriteRequest: value = ' + this._value.toString('hex'));
-	var command=bytesToString(this._value);
-	console.log(command);
-	handleCommand(command);
-  if (this._updateValueCallback) {
-    console.log('EchoCharacteristic - onWriteRequest: notifying');
-    this._updateValueCallback(this._value);
-  }
-
-  callback(this.RESULT_SUCCESS);
-};
-bleno
-	.on('stateChange', function(state) {
-		console.log('on -> stateChange: ' + state);
-		if (state === 'poweredOn') {
-			bleno.startAdvertising('gardenbot', ['ec00']);
-		}
-		else {
-			bleno.stopAdvertising();
-		}
-	})
-	.on('advertisingStart', function(error) {
-		console.log('on -> advertisingStart: '
-			+ (error ? 'error ' + error : 'success'));
-		if (!error) {
-			bleno.setServices([
-				new BlenoPrimaryService({
-					uuid: 'ec00',
-					characteristics: [
-						new EchoCharacteristic()
-					]
-				})
-			]);
+	val=val?'high':'low';
+	if (val=='high') { // timeout active gpio calls, in case the robot gets stuck doing something
+		var timeoutNum=(gpiocalls[num]||0)+1;
+		gpiocalls[num]=timeoutNum;
+		setTimeout(()=>{
+			if (gpiocalls[num]==timeoutNum) { // time this gpio call out
+				exec('gpioctl dirout-low '+num);
+			}
+		}, GPIO_TIMEOUT);
+	}
+	exec('gpioctl dirout-'+val+' '+num, (err, stdout, stderr)=>{
+		if (err) {
+			return console.log(err);
 		}
 	});
-// }
-// { setup status light
-function showStatus() {
-	switch (state) {
-		case 0: // { offline - show blinky LED
-			state_led=!state_led;
-			gpioset(gpio.led, state_led);
-		break; // }
-		case 1: // { online - show solid LED
-			if (!state_led) {
-				state_led=true;
-				gpioset(gpio.led, state_led);
-			}
-		break; // }
-	}
-	setTimeout(showStatus, 500);
 }
-showStatus();
 // }
 // { motor control
 function motorRight() {
@@ -112,6 +118,7 @@ function motorLeft() {
 	gpioset(gpio.motor.right.b, true);
 }
 function motorForward() {
+	console.log('motor forward');
 	gpioset(gpio.motor.left.a, true);
 	gpioset(gpio.motor.left.b, false);
 	gpioset(gpio.motor.right.a, true);
@@ -131,6 +138,7 @@ function motorOff() {
 }
 // }
 function handleCommand(command) {
+	console.log('command: '+command);
 	switch(command) {
 		case 'back':
 			motorBackward();
@@ -149,3 +157,23 @@ function handleCommand(command) {
 		break;
 	}
 }
+
+var bootup_moves=[
+	['forward', 2000],
+	['left', 2000],
+	['forward', 2000],
+	['back', 2000],
+	['right', 2000],
+	['back', 1000],
+	['stop', 1]
+];
+
+function boot_sequence() {
+	var cmd=bootup_moves.shift();
+	if (!cmd) {
+		return;
+	}
+	handleCommand(cmd[0]);
+	setTimeout(boot_sequence, cmd[1]);
+}
+boot_sequence();
