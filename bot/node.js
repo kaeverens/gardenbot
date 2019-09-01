@@ -1,4 +1,7 @@
+const crypto = require('crypto')
+const fs=require('fs');
 const { exec } = require('child_process');
+
 var https = require('https');
 var querystring=require('querystring');
 
@@ -33,6 +36,7 @@ exec("ifconfig | grep 'eth0 ' | cut -d ' ' -f 11", (err, stdout, stderr)=>{
 	}, ret=>{
 		bot.id=ret.id;
 		bot.mac=mac;
+		setTimeout(grabPhoto, 1000);
 		bot.last_cmd=0;
 		setInterval(cmdPoll, 1000);
 	});
@@ -74,8 +78,13 @@ function ajax(url, params, callback) {
 	};
 	var req=https.request(options,  res=>{
 		res.on('data', d=>{
-			var ret=JSON.parse(''+d);
-			callback(ret);
+			try {
+				var ret=JSON.parse(''+d);
+				callback(ret);
+			}
+			catch(e) {
+				return;
+			}			
 		});
 	});
 	req.on('error', e=>{
@@ -177,3 +186,50 @@ function boot_sequence() {
 	setTimeout(boot_sequence, cmd[1]);
 }
 boot_sequence();
+
+let photoLock=0;
+let grabPhotoTimeout=0;
+let lastUploadedGrab=0;
+function grabPhoto() {
+	clearTimeout(grabPhotoTimeout);
+	grabPhotoTimeout=setTimeout(grabPhoto, 11000);
+console.log(1);
+	if (photoLock && photoLock>(+(new Date))-10000) {
+		return;
+	}
+console.log(2);
+	photoLock=+(new Date);
+	exec("fswebcam --no-banner -r 800x600 grab.jpg", (err, stdout, stderr)=>{
+console.log(3);
+		fs.readFile('grab.jpg', (err, data)=>{
+console.log(4);
+			if (err) {
+				photoLock=0;
+				return;
+			}
+console.log(5);
+			var base64=data.toString('base64');
+			var hash=crypto
+				.createHash('md5')
+				.update(base64)
+				.digest('hex');
+			if (hash===lastUploadedGrab) {
+console.log('image has not changed');
+				photoLock=0;
+				clearTimeout(grabPhotoTimeout);
+				grabPhotoTimeout=setTimeout(grabPhoto, 1000);
+				return;
+			}
+			lastUploadedGrab=hash;
+			delete data;
+			ajax('/upload-image.php', {
+				mac:bot.mac,
+				base64:base64
+			}, ret=>{
+console.log(6);
+				photoLock=0;
+				grabPhoto();
+			});
+		});
+	});
+}
